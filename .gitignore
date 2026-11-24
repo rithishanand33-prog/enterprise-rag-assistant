@@ -24,3 +24,6 @@ vectorstore/
 # Local AI coding tools
 .agents/
 .claude/
+# Python virtual environments
+venv*/
+.venv/

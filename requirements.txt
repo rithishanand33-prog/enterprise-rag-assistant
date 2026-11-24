@@ -1,13 +1,26 @@
 
-langchain
+# Streamlit application
+streamlit
+
+# LangChain and document processing
+langchain-core
 langchain-community
 langchain-text-splitters
-langchain-openai
-langchain-google-genai
 langchain-huggingface
-pypdf
+langchain-google-genai
+
+# Vector database and embeddings
 faiss-cpu
-python-dotenv
 sentence-transformers
-streamlit
+
+# PDF processing and OCR
+pypdf
+pymupdf
+pytesseract
+pillow
+
+# Environment configuration
+python-dotenv
+
+# Testing
 pytest
