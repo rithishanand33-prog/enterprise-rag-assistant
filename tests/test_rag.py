@@ -26,19 +26,30 @@ def create_document(
 
 def create_vectorstore(results):
     vectorstore = Mock()
+
     vectorstore.similarity_search_with_score.return_value = results
+
     return vectorstore
 
 
 def create_llm(response="Employees receive 12 days of annual leave."):
     llm = Mock()
+
     llm.invoke.return_value = Mock(content=response)
+
     return llm
 
 
+# --------------------------------------------------
+# Existing RAG tests
+# --------------------------------------------------
+
 def test_answer_contains_source_citation():
+
     document = create_document()
+
     vectorstore = create_vectorstore([(document, 0.5)])
+
     llm = create_llm()
 
     answer = answer_question(
@@ -53,7 +64,9 @@ def test_answer_contains_source_citation():
 
 
 def test_empty_retrieval_returns_message():
+
     vectorstore = create_vectorstore([])
+
     llm = create_llm()
 
     answer = answer_question(
@@ -63,12 +76,16 @@ def test_empty_retrieval_returns_message():
     )
 
     assert answer == ABSTAIN_MESSAGE
+
     llm.invoke.assert_not_called()
 
 
 def test_prompt_contains_grounding_instructions():
+
     document = create_document()
+
     vectorstore = create_vectorstore([(document, 0.5)])
+
     llm = create_llm()
 
     answer_question(
@@ -85,8 +102,11 @@ def test_prompt_contains_grounding_instructions():
 
 
 def test_distance_threshold_rejects_irrelevant_documents():
+
     document = create_document()
+
     vectorstore = create_vectorstore([(document, 2.0)])
+
     llm = create_llm()
 
     answer = answer_question(
@@ -96,10 +116,12 @@ def test_distance_threshold_rejects_irrelevant_documents():
     )
 
     assert answer == ABSTAIN_MESSAGE
+
     llm.invoke.assert_not_called()
 
 
 def test_multiple_documents_are_used_as_context():
+
     document_one = create_document(
         content="Annual leave is 12 days.",
         source="leave_policy.pdf",
@@ -117,7 +139,9 @@ def test_multiple_documents_are_used_as_context():
         (document_two, 0.7),
     ])
 
-    llm = create_llm("Annual leave is 12 days and sick leave is 8 days.")
+    llm = create_llm(
+        "Annual leave is 12 days and sick leave is 8 days."
+    )
 
     answer_question(
         "What are the leave policies?",
@@ -132,12 +156,14 @@ def test_multiple_documents_are_used_as_context():
 
 
 def test_missing_source_metadata_uses_unknown_document():
+
     document = Document(
         page_content="Employees receive annual leave.",
         metadata={},
     )
 
     vectorstore = create_vectorstore([(document, 0.5)])
+
     llm = create_llm("Employees receive annual leave.")
 
     answer = answer_question(
@@ -150,8 +176,11 @@ def test_missing_source_metadata_uses_unknown_document():
 
 
 def test_empty_llm_response_returns_abstention():
+
     document = create_document()
+
     vectorstore = create_vectorstore([(document, 0.5)])
+
     llm = create_llm("")
 
     answer = answer_question(
@@ -164,8 +193,11 @@ def test_empty_llm_response_returns_abstention():
 
 
 def test_llm_abstention_does_not_include_sources():
+
     document = create_document()
+
     vectorstore = create_vectorstore([(document, 0.5)])
+
     llm = create_llm(ABSTAIN_MESSAGE)
 
     answer = answer_question(
@@ -179,11 +211,16 @@ def test_llm_abstention_does_not_include_sources():
 
 
 def test_structured_llm_response_is_supported():
+
     document = create_document()
+
     vectorstore = create_vectorstore([(document, 0.5)])
 
     llm = create_llm([
-        {"type": "text", "text": "Employees receive 12 days."}
+        {
+            "type": "text",
+            "text": "Employees receive 12 days."
+        }
     ])
 
     answer = answer_question(
@@ -196,8 +233,11 @@ def test_structured_llm_response_is_supported():
 
 
 def test_document_at_exact_threshold_is_accepted():
+
     document = create_document()
+
     vectorstore = create_vectorstore([(document, 1.48)])
+
     llm = create_llm()
 
     answer = answer_question(
@@ -207,12 +247,16 @@ def test_document_at_exact_threshold_is_accepted():
     )
 
     assert "12 days" in answer
+
     llm.invoke.assert_called_once()
 
 
 def test_document_above_threshold_is_rejected():
+
     document = create_document()
+
     vectorstore = create_vectorstore([(document, 1.49)])
+
     llm = create_llm()
 
     answer = answer_question(
@@ -222,6 +266,7 @@ def test_document_above_threshold_is_rejected():
     )
 
     assert answer == ABSTAIN_MESSAGE
+
     llm.invoke.assert_not_called()
 
 
@@ -230,6 +275,7 @@ def test_document_above_threshold_is_rejected():
 # --------------------------------------------------
 
 def test_greeting_returns_friendly_response():
+
     response = handle_conversational_message("Hi")
 
     assert response is not None
@@ -237,6 +283,7 @@ def test_greeting_returns_friendly_response():
 
 
 def test_thank_you_returns_response():
+
     response = handle_conversational_message("Thank you")
 
     assert response is not None
@@ -244,6 +291,7 @@ def test_thank_you_returns_response():
 
 
 def test_capabilities_question_returns_description():
+
     response = handle_conversational_message("What can you do?")
 
     assert response is not None
@@ -251,6 +299,7 @@ def test_capabilities_question_returns_description():
 
 
 def test_document_question_is_not_handled_as_conversation():
+
     response = handle_conversational_message(
         "How many annual leave days do employees receive?"
     )
@@ -259,7 +308,115 @@ def test_document_question_is_not_handled_as_conversation():
 
 
 def test_goodbye_returns_response():
+
     response = handle_conversational_message("Goodbye")
 
     assert response is not None
     assert "Goodbye" in response
+
+
+# --------------------------------------------------
+# Conversational memory tests
+# --------------------------------------------------
+
+def test_follow_up_question_uses_previous_user_questions():
+
+    document = create_document(
+        content="Sick leave is 8 days.",
+        source="sick_policy.pdf",
+        page=1,
+    )
+
+    vectorstore = create_vectorstore([(document, 0.5)])
+
+    llm = create_llm("Sick leave is 8 days.")
+
+    history = [
+        {
+            "role": "user",
+            "content": (
+                "How many annual leave days do employees receive?"
+            ),
+        },
+        {
+            "role": "assistant",
+            "content": (
+                "Employees receive 12 days of annual leave."
+            ),
+        },
+    ]
+
+    answer_question(
+        "What about sick leave?",
+        vectorstore,
+        llm,
+        chat_history=history,
+    )
+
+    retrieval_query = (
+        vectorstore.similarity_search_with_score.call_args[0][0]
+    )
+
+    assert "annual leave" in retrieval_query.lower()
+    assert "sick leave" in retrieval_query.lower()
+
+
+def test_prompt_includes_recent_conversation_history():
+
+    document = create_document(
+        content="Sick leave is 8 days.",
+    )
+
+    vectorstore = create_vectorstore([(document, 0.5)])
+
+    llm = create_llm("Sick leave is 8 days.")
+
+    history = [
+        {
+            "role": "user",
+            "content": (
+                "How many annual leave days do employees receive?"
+            ),
+        },
+        {
+            "role": "assistant",
+            "content": (
+                "Employees receive 12 days of annual leave."
+            ),
+        },
+    ]
+
+    answer_question(
+        "What about sick leave?",
+        vectorstore,
+        llm,
+        chat_history=history,
+    )
+
+    prompt = llm.invoke.call_args[0][0]
+
+    assert "RECENT CONVERSATION" in prompt
+    assert "How many annual leave days" in prompt
+    assert "12 days of annual leave" in prompt
+    assert "What about sick leave?" in prompt
+
+
+def test_answer_question_works_without_chat_history():
+
+    document = create_document()
+
+    vectorstore = create_vectorstore([(document, 0.5)])
+
+    llm = create_llm()
+
+    answer = answer_question(
+        "How many annual leave days do employees receive?",
+        vectorstore,
+        llm,
+    )
+
+    assert "12 days" in answer
+
+    prompt = llm.invoke.call_args[0][0]
+
+    assert "No previous conversation." in prompt
