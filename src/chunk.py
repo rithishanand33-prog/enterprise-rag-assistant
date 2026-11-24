@@ -13,9 +13,10 @@ def create_chunks(documents=None):
     print("\nSplitting documents into chunks...")
 
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,
-        chunk_overlap=100,
-        length_function=len
+        chunk_size=800,
+        chunk_overlap=150,
+        length_function=len,
+        separators=["\n\n", "\n", ". ", " ", ""]
     )
 
     chunks = text_splitter.split_documents(documents)

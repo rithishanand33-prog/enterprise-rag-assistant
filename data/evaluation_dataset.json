@@ -1,0 +1,87 @@
+
+[
+  {
+    "question": "How many paid annual leave days do full-time employees receive?",
+    "expected_page": 2,
+    "expected_keywords": ["12 days", "paid annual leave", "calendar year"],
+    "expected_answer": "Full-time employees receive 12 days of paid annual leave per calendar year.",
+    "should_abstain": false
+  },
+  {
+    "question": "How many paid sick leave days do employees receive?",
+    "expected_page": 2,
+    "expected_keywords": ["8 days", "paid sick leave"],
+    "expected_answer": "Employees receive 8 days of paid sick leave.",
+    "should_abstain": false
+  },
+  {
+    "question": "What are the standard office working hours?",
+    "expected_page": 2,
+    "expected_keywords": ["Monday through Friday", "9:00 a.m.", "5:30 p.m."],
+    "expected_answer": "Monday through Friday, 9:00 a.m. to 5:30 p.m.",
+    "should_abstain": false
+  },
+  {
+    "question": "How many days per week can eligible employees work remotely?",
+    "expected_page": 2,
+    "expected_keywords": ["2 days per week", "manager approval"],
+    "expected_answer": "Eligible roles may work remotely up to 2 days per week with manager approval.",
+    "should_abstain": false
+  },
+  {
+    "question": "How many days in advance should foreseeable leave requests be submitted?",
+    "expected_page": 2,
+    "expected_keywords": ["5 working days", "in advance"],
+    "expected_answer": "Foreseeable leave requests should be submitted 5 working days in advance.",
+    "should_abstain": false
+  },
+  {
+    "question": "What should employees do if they suspect phishing?",
+    "expected_page": 2,
+    "expected_keywords": ["suspected phishing", "promptly", "IT support"],
+    "expected_answer": "Employees should report suspected phishing promptly to IT support.",
+    "should_abstain": false
+  },
+  {
+    "question": "How often should managers hold one-on-one meetings?",
+    "expected_page": 3,
+    "expected_keywords": ["one-on-one meetings", "once per month"],
+    "expected_answer": "Managers should hold one-on-one meetings once per month.",
+    "should_abstain": false
+  },
+  {
+    "question": "How many times per year are formal performance discussions normally conducted?",
+    "expected_page": 3,
+    "expected_keywords": ["twice per year", "performance discussions"],
+    "expected_answer": "Formal performance discussions are normally conducted twice per year.",
+    "should_abstain": false
+  },
+  {
+    "question": "What is the CEO's name?",
+    "expected_page": null,
+    "expected_keywords": [],
+    "expected_answer": "I could not find this information in the uploaded documents.",
+    "should_abstain": true
+  },
+  {
+    "question": "What is the company's annual revenue?",
+    "expected_page": null,
+    "expected_keywords": [],
+    "expected_answer": "I could not find this information in the uploaded documents.",
+    "should_abstain": true
+  },
+  {
+    "question": "What is the company's stock market ticker?",
+    "expected_page": null,
+    "expected_keywords": [],
+    "expected_answer": "I could not find this information in the uploaded documents.",
+    "should_abstain": true
+  },
+  {
+    "question": "Who founded the company?",
+    "expected_page": null,
+    "expected_keywords": [],
+    "expected_answer": "I could not find this information in the uploaded documents.",
+    "should_abstain": true
+  }
+]
