@@ -1,0 +1,26 @@
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+venv/
+
+# API keys and secrets
+.env
+.env.*
+
+# Testing
+.pytest_cache/
+
+# IDE
+.vscode/
+
+# Generated vector database
+vectorstore/
+
+# Mac files
+.DS_Store
+# Local AI coding tools
+.agents/
+.claude/
