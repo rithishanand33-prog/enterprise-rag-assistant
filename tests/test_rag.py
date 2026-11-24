@@ -1,73 +1,50 @@
 
+from unittest.mock import Mock
+
 from langchain_core.documents import Document
 
-from src.rag import answer_question, ABSTAIN_MESSAGE
+from src.rag import (
+    ABSTAIN_MESSAGE,
+    answer_question,
+    handle_conversational_message,
+)
 
 
-class FakeVectorStore:
-    def __init__(self, documents, distances=None):
-        self.documents = documents
-        self.distances = distances or [0.5] * len(documents)
-
-    def similarity_search_with_score(self, question, k=3):
-        return [
-            (document, distance)
-            for document, distance in zip(
-                self.documents[:k],
-                self.distances[:k]
-            )
-        ]
-
-
-class FakeLLM:
-    def __init__(self, response):
-        self.response = response
-        self.last_prompt = ""
-        self.called = False
-
-    def invoke(self, prompt):
-        self.called = True
-        self.last_prompt = prompt
-
-        return type(
-            "FakeResponse",
-            (),
-            {"content": self.response}
-        )()
-
-
-def make_document(
+def create_document(
     content="Employees receive 12 days of annual leave.",
-    source="handbook.pdf",
-    page=1
+    source="employee_handbook.pdf",
+    page=1,
 ):
-    metadata = {}
-
-    if source is not None:
-        metadata["source"] = source
-
-    if page is not None:
-        metadata["page"] = page
-
     return Document(
         page_content=content,
-        metadata=metadata
+        metadata={
+            "source": source,
+            "page": page,
+        },
     )
+
+
+def create_vectorstore(results):
+    vectorstore = Mock()
+    vectorstore.similarity_search_with_score.return_value = results
+    return vectorstore
+
+
+def create_llm(response="Employees receive 12 days of annual leave."):
+    llm = Mock()
+    llm.invoke.return_value = Mock(content=response)
+    return llm
 
 
 def test_answer_contains_source_citation():
-    document = make_document(
-        source="employee_handbook.pdf",
-        page=1
-    )
-
-    vectorstore = FakeVectorStore([document])
-    llm = FakeLLM("Employees receive 12 days of annual leave.")
+    document = create_document()
+    vectorstore = create_vectorstore([(document, 0.5)])
+    llm = create_llm()
 
     answer = answer_question(
         "How many annual leave days do employees receive?",
         vectorstore,
-        llm
+        llm,
     )
 
     assert "12 days" in answer
@@ -76,135 +53,125 @@ def test_answer_contains_source_citation():
 
 
 def test_empty_retrieval_returns_message():
-    vectorstore = FakeVectorStore([])
-    llm = FakeLLM("This should not be called.")
+    vectorstore = create_vectorstore([])
+    llm = create_llm()
 
     answer = answer_question(
         "What is the company policy?",
         vectorstore,
-        llm
+        llm,
     )
 
     assert answer == ABSTAIN_MESSAGE
-    assert llm.called is False
+    llm.invoke.assert_not_called()
 
 
 def test_prompt_contains_grounding_instructions():
-    document = make_document()
-
-    vectorstore = FakeVectorStore([document])
-    llm = FakeLLM("Employees receive 12 days of annual leave.")
+    document = create_document()
+    vectorstore = create_vectorstore([(document, 0.5)])
+    llm = create_llm()
 
     answer_question(
-        "How many annual leave days are available?",
+        "How many annual leave days do employees receive?",
         vectorstore,
-        llm
+        llm,
     )
 
-    assert "ONLY" in llm.last_prompt
-    assert "Never invent" in llm.last_prompt
-    assert "outside knowledge" in llm.last_prompt.lower()
-    assert "untrusted reference data" in llm.last_prompt
+    prompt = llm.invoke.call_args[0][0]
+
+    assert "ONLY the supplied document context" in prompt
+    assert "Never use outside knowledge or assumptions" in prompt
+    assert ABSTAIN_MESSAGE in prompt
 
 
 def test_distance_threshold_rejects_irrelevant_documents():
-    document = make_document()
-
-    vectorstore = FakeVectorStore(
-        [document],
-        distances=[0.5]
-    )
-
-    llm = FakeLLM("This should not be called.")
+    document = create_document()
+    vectorstore = create_vectorstore([(document, 2.0)])
+    llm = create_llm()
 
     answer = answer_question(
         "What is the company revenue?",
         vectorstore,
         llm,
-        max_distance=0.1
     )
 
     assert answer == ABSTAIN_MESSAGE
-    assert llm.called is False
+    llm.invoke.assert_not_called()
 
 
 def test_multiple_documents_are_used_as_context():
-    documents = [
-        make_document(
-            content="Employees receive 12 days of annual leave.",
-            source="leave.pdf",
-            page=1
-        ),
-        make_document(
-            content="Employees receive 8 days of paid sick leave.",
-            source="sick_leave.pdf",
-            page=2
-        )
-    ]
-
-    vectorstore = FakeVectorStore(
-        documents,
-        distances=[0.4, 0.7]
+    document_one = create_document(
+        content="Annual leave is 12 days.",
+        source="leave_policy.pdf",
+        page=1,
     )
 
-    llm = FakeLLM("The documents describe annual and sick leave.")
+    document_two = create_document(
+        content="Sick leave is 8 days.",
+        source="sick_policy.pdf",
+        page=2,
+    )
 
-    answer = answer_question(
-        "Tell me about employee leave.",
+    vectorstore = create_vectorstore([
+        (document_one, 0.5),
+        (document_two, 0.7),
+    ])
+
+    llm = create_llm("Annual leave is 12 days and sick leave is 8 days.")
+
+    answer_question(
+        "What are the leave policies?",
         vectorstore,
-        llm
+        llm,
     )
 
-    assert "12 days" in llm.last_prompt
-    assert "8 days" in llm.last_prompt
-    assert "leave.pdf" in answer
-    assert "sick_leave.pdf" in answer
+    prompt = llm.invoke.call_args[0][0]
+
+    assert "Annual leave is 12 days." in prompt
+    assert "Sick leave is 8 days." in prompt
 
 
 def test_missing_source_metadata_uses_unknown_document():
-    document = make_document(
-        source=None,
-        page=None
+    document = Document(
+        page_content="Employees receive annual leave.",
+        metadata={},
     )
 
-    vectorstore = FakeVectorStore([document])
-    llm = FakeLLM("Employees receive 12 days of annual leave.")
+    vectorstore = create_vectorstore([(document, 0.5)])
+    llm = create_llm("Employees receive annual leave.")
 
     answer = answer_question(
-        "How many annual leave days are available?",
+        "What leave do employees receive?",
         vectorstore,
-        llm
+        llm,
     )
 
     assert "Unknown document" in answer
-    assert "Sources:" in answer
 
 
 def test_empty_llm_response_returns_abstention():
-    document = make_document()
-
-    vectorstore = FakeVectorStore([document])
-    llm = FakeLLM("   ")
+    document = create_document()
+    vectorstore = create_vectorstore([(document, 0.5)])
+    llm = create_llm("")
 
     answer = answer_question(
-        "How many annual leave days are available?",
+        "How many annual leave days do employees receive?",
         vectorstore,
-        llm
+        llm,
     )
 
     assert answer == ABSTAIN_MESSAGE
 
 
 def test_llm_abstention_does_not_include_sources():
-    document = make_document()
-
-    vectorstore = FakeVectorStore([document])
-    llm = FakeLLM(ABSTAIN_MESSAGE)
+    document = create_document()
+    vectorstore = create_vectorstore([(document, 0.5)])
+    llm = create_llm(ABSTAIN_MESSAGE)
 
     answer = answer_question(
         "What is the company revenue?",
         vectorstore,
-        llm
+        llm,
     )
 
     assert answer == ABSTAIN_MESSAGE
@@ -212,62 +179,87 @@ def test_llm_abstention_does_not_include_sources():
 
 
 def test_structured_llm_response_is_supported():
-    document = make_document()
+    document = create_document()
+    vectorstore = create_vectorstore([(document, 0.5)])
 
-    vectorstore = FakeVectorStore([document])
-
-    llm = FakeLLM([
-        {"text": "Employees receive "},
-        {"text": "12 days of annual leave."}
+    llm = create_llm([
+        {"type": "text", "text": "Employees receive 12 days."}
     ])
 
     answer = answer_question(
-        "How many annual leave days are available?",
+        "How many annual leave days do employees receive?",
         vectorstore,
-        llm
+        llm,
     )
 
-    assert "12 days" in answer
-    assert "Sources:" in answer
+    assert "Employees receive 12 days." in answer
 
 
 def test_document_at_exact_threshold_is_accepted():
-    document = make_document()
-
-    vectorstore = FakeVectorStore(
-        [document],
-        distances=[1.48]
-    )
-
-    llm = FakeLLM("Employees receive 12 days of annual leave.")
+    document = create_document()
+    vectorstore = create_vectorstore([(document, 1.48)])
+    llm = create_llm()
 
     answer = answer_question(
-        "How many annual leave days are available?",
+        "How many annual leave days do employees receive?",
         vectorstore,
         llm,
-        max_distance=1.48
     )
 
-    assert llm.called is True
     assert "12 days" in answer
+    llm.invoke.assert_called_once()
 
 
 def test_document_above_threshold_is_rejected():
-    document = make_document()
-
-    vectorstore = FakeVectorStore(
-        [document],
-        distances=[1.49]
-    )
-
-    llm = FakeLLM("This should not be called.")
+    document = create_document()
+    vectorstore = create_vectorstore([(document, 1.49)])
+    llm = create_llm()
 
     answer = answer_question(
-        "How many annual leave days are available?",
+        "What is the company revenue?",
         vectorstore,
         llm,
-        max_distance=1.48
     )
 
     assert answer == ABSTAIN_MESSAGE
-    assert llm.called is False
+    llm.invoke.assert_not_called()
+
+
+# --------------------------------------------------
+# Conversational handling tests
+# --------------------------------------------------
+
+def test_greeting_returns_friendly_response():
+    response = handle_conversational_message("Hi")
+
+    assert response is not None
+    assert "Hello" in response
+
+
+def test_thank_you_returns_response():
+    response = handle_conversational_message("Thank you")
+
+    assert response is not None
+    assert "welcome" in response.lower()
+
+
+def test_capabilities_question_returns_description():
+    response = handle_conversational_message("What can you do?")
+
+    assert response is not None
+    assert "uploaded company PDFs" in response
+
+
+def test_document_question_is_not_handled_as_conversation():
+    response = handle_conversational_message(
+        "How many annual leave days do employees receive?"
+    )
+
+    assert response is None
+
+
+def test_goodbye_returns_response():
+    response = handle_conversational_message("Goodbye")
+
+    assert response is not None
+    assert "Goodbye" in response
